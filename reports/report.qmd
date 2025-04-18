@@ -343,6 +343,7 @@ execute_ddl(cnx,"""
 UPDATE wdi_country
 SET `Income Group` = 'High income'
 WHERE `Country Code` = 'VEN';
+COMMIT;
 """)
 
 
