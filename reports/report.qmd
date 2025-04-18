@@ -91,8 +91,11 @@ List all non-countries.
 ## (skills: select, where)
 
 run_sql_and_return_html(cnx,"""
-SELECT `Country Code`, `Short Name`
-FROM world_bank_data.wdi_country
+SELECT 
+  `Country Code` AS country_code, 
+  `Short Name` AS short_name
+FROM 
+  world_bank_data.wdi_country
 WHERE 
   `Region` IS NULL
   OR `Income Group` IS NULL
@@ -102,7 +105,9 @@ WHERE
     'LCN', 'LIC', 'LMC', 'LMY', 'MEA', 'MIC', 'MNA', 'NAC', 'OED', 'OSS',
     'PRE', 'PSS', 'PST', 'SAS', 'SSA', 'SSF', 'SST', 'TEA', 'TEC', 'TLA',
     'TMN', 'TSA', 'TSS', 'UMC', 'WLD'
-  );
+  )
+ORDER BY 
+  `Country Code`;
 
 """)
 ```
@@ -310,14 +315,18 @@ ORDER BY
 ## you will be scored on the number of records returned and the value(s) 
 ## in the first column.
 
+
+
 run_sql_and_return_html(cnx,"""
 SELECT 
-  `Short Name`
+  `Short Name` AS short_name,
+  `Country Code` AS country_code,
+  `Region` AS region
 FROM 
   wdi_country
 WHERE 
   `Income Group` IS NULL
-  OR `Income Group` = ''
+   OR `Income Group` = ''
 ORDER BY 
   `Short Name`;
 
@@ -345,15 +354,9 @@ WHERE `Country Code` = 'VEN';
 ## Now, display the country again to verify the change stuck!
 
 run_sql_and_return_html(cnx,"""
-SELECT 
-  `Country Code`, 
-  `Short Name`, 
-  `Region`, 
-  `Income Group`
-FROM 
-  wdi_country
-WHERE 
-  `Country Code` = 'VEN';
+SELECT `Country Code`, `Short Name`, `Income Group`
+FROM wdi_country
+WHERE `Country Code` = 'VEN';
 """)
 
 ```
@@ -400,40 +403,23 @@ ORDER BY
 ## (skills: select, aggregate, group by, nested query)
 
 run_sql_and_return_html(cnx,"""
-WITH all_regions AS (
-  SELECT DISTINCT `Region`
-  FROM wdi_country
-),
-region_income_counts AS (
-  SELECT 
-    `Region`,
-    SUM(CASE WHEN `Income Group` = 'High income' THEN 1 ELSE 0 END) AS high_income,
-    SUM(CASE WHEN `Income Group` = 'Upper middle income' THEN 1 ELSE 0 END) AS upper_middle_income,
-    SUM(CASE WHEN `Income Group` = 'Lower middle income' THEN 1 ELSE 0 END) AS lower_middle_income,
-    SUM(CASE WHEN `Income Group` = 'Low income' THEN 1 ELSE 0 END) AS low_income,
-    SUM(CASE WHEN `Income Group` NOT IN (
-      'High income', 'Upper middle income', 'Lower middle income', 'Low income'
-    ) OR `Income Group` IS NULL THEN 1 ELSE 0 END) AS other,
-    CAST(COUNT(*) AS DECIMAL(4,1)) AS total_countries
-  FROM 
-    wdi_country
-  GROUP BY 
-    `Region`
-)
 SELECT 
-  r.`Region`,
-  COALESCE(c.high_income, 0) AS high_income,
-  COALESCE(c.upper_middle_income, 0) AS upper_middle_income,
-  COALESCE(c.lower_middle_income, 0) AS lower_middle_income,
-  COALESCE(c.low_income, 0) AS low_income,
-  COALESCE(c.other, 0) AS other,
-  COALESCE(c.total_countries, 0) AS total_countries
+  `Region`,
+  SUM(CASE WHEN `Income Group` = 'High income' THEN 1 ELSE 0 END) AS high_income,
+  SUM(CASE WHEN `Income Group` = 'Upper middle income' THEN 1 ELSE 0 END) AS upper_middle_income,
+  SUM(CASE WHEN `Income Group` = 'Lower middle income' THEN 1 ELSE 0 END) AS lower_middle_income,
+  SUM(CASE WHEN `Income Group` = 'Low income' THEN 1 ELSE 0 END) AS low_income,
+  SUM(CASE WHEN `Income Group` NOT IN (
+      'High income', 'Upper middle income', 'Lower middle income', 'Low income'
+  ) OR `Income Group` IS NULL THEN 1 ELSE 0 END) AS other,
+  COUNT(*) AS total
 FROM 
-  all_regions r
-LEFT JOIN 
-  region_income_counts c ON r.`Region` = c.`Region`
+  wdi_country
+GROUP BY 
+  `Region`
 ORDER BY 
-  r.`Region`;
+  `Region`;
+
 """)
 
 ```
@@ -698,12 +684,12 @@ ORDER BY
 run_sql_and_return_html(cnx,"""
 WITH income_counts AS (
   SELECT 
-    COALESCE(`Income Group`, 'Unknown') AS income_group,
+    `Income Group` AS income_group,
     COUNT(*) AS country_count
   FROM 
     wdi_country
   GROUP BY 
-    income_group
+    `Income Group`
 ),
 total_count AS (
   SELECT COUNT(*) AS total_countries FROM wdi_country
@@ -720,7 +706,6 @@ CROSS JOIN
   total_count t
 ORDER BY 
   i.country_count DESC;
-
 """)
 
 ```
