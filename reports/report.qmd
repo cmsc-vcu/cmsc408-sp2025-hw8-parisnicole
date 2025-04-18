@@ -91,7 +91,7 @@ List all non-countries.
 ## (skills: select, where)
 
 run_sql_and_return_html(cnx,"""
-SELECT *
+SELECT `Country Code`, `Short Name`
 FROM world_bank_data.wdi_country
 WHERE 
   `Region` IS NULL
@@ -134,14 +134,10 @@ FROM world_bank_data.wdi_country
 WHERE 
   `Region` IS NOT NULL
   AND LENGTH(`Country Code`) = 3
-  AND `Country Code` NOT IN (
-    'AFE', 'AFW', 'ARB', 'CEB', 'CSS', 'EAS', 'EAP', 'EAR', 'ECA', 'EMU',
-    'EUU', 'FCS', 'HPC', 'HIC', 'IBD', 'IBT', 'IDA', 'IDB', 'IDX', 'LAC',
-    'LCN', 'LIC', 'LMC', 'LMY', 'MEA', 'MIC', 'MNA', 'NAC', 'OED', 'OSS',
-    'PRE', 'PSS', 'PST', 'SAS', 'SSA', 'SSF', 'SST', 'TEA', 'TEC', 'TLA',
-    'TMN', 'TSA', 'TSS', 'UMC', 'WLD'
-  )
-  OR `Country Code` = 'VEN';
+  AND `Short Name` NOT IN (
+    'World', 'High income', 'Low & middle income', 'IDA total', 'IBRD only',
+    'Fragile and conflict affected situations', 'Least developed countries: UN classification'
+  );
 """)
 ```
 
@@ -316,15 +312,12 @@ ORDER BY
 
 run_sql_and_return_html(cnx,"""
 SELECT 
-  `Country Code`, 
-  `Short Name`, 
-  `Region`, 
-  `Income Group`
+  `Short Name`
 FROM 
   wdi_country
 WHERE 
   `Income Group` IS NULL
-     OR `Income Group` = ''
+  OR `Income Group` = ''
 ORDER BY 
   `Short Name`;
 
@@ -341,18 +334,9 @@ ORDER BY
 ## NOTE - if you get this wrong, all subsequent tables will be wrong!
 
 execute_ddl(cnx,"""
-SELECT 
-  `Country Code`,
-  `Short Name`,
-  `Region`,
-  `Income Group`
-FROM 
-  wdi_country
-WHERE 
-  `Income Group` IS NULL
-     OR `Income Group` = ''
-ORDER BY 
-  `Short Name`;
+UPDATE wdi_country
+SET `Income Group` = 'High income'
+WHERE `Country Code` = 'VEN';
 """)
 
 
@@ -369,8 +353,7 @@ SELECT
 FROM 
   wdi_country
 WHERE 
-  `Income Group` IS NULL
-     OR `Income Group` = ''
+  `Country Code` = 'VEN';
 """)
 
 ```
@@ -390,6 +373,8 @@ SELECT
   COUNT(*) AS country_count
 FROM 
   wdi_country
+WHERE
+  `Income Group` IS NOT NULL
 GROUP BY 
   `Region`, `Income Group`
 ORDER BY 
@@ -426,9 +411,10 @@ region_income_counts AS (
     SUM(CASE WHEN `Income Group` = 'Upper middle income' THEN 1 ELSE 0 END) AS upper_middle_income,
     SUM(CASE WHEN `Income Group` = 'Lower middle income' THEN 1 ELSE 0 END) AS lower_middle_income,
     SUM(CASE WHEN `Income Group` = 'Low income' THEN 1 ELSE 0 END) AS low_income,
-    SUM(CASE WHEN `Income Group` NOT IN ('High income', 'Upper middle income', 'Lower middle income', 'Low income') 
-             OR `Income Group` IS NULL THEN 1 ELSE 0 END) AS other,
-    COUNT(*) AS total
+    SUM(CASE WHEN `Income Group` NOT IN (
+      'High income', 'Upper middle income', 'Lower middle income', 'Low income'
+    ) OR `Income Group` IS NULL THEN 1 ELSE 0 END) AS other,
+    CAST(COUNT(*) AS DECIMAL(4,1)) AS total_countries
   FROM 
     wdi_country
   GROUP BY 
@@ -441,14 +427,13 @@ SELECT
   COALESCE(c.lower_middle_income, 0) AS lower_middle_income,
   COALESCE(c.low_income, 0) AS low_income,
   COALESCE(c.other, 0) AS other,
-  COALESCE(c.total, 0) AS total
+  COALESCE(c.total_countries, 0) AS total_countries
 FROM 
   all_regions r
 LEFT JOIN 
   region_income_counts c ON r.`Region` = c.`Region`
 ORDER BY 
   r.`Region`;
-
 """)
 
 ```
@@ -564,12 +549,13 @@ existing_combinations AS (
     `Income Group` AS income_group
   FROM 
     wdi_country
-  GROUP BY 
-    `Region`, `Income Group`
+  WHERE `Income Group` IS NOT NULL
+  GROUP BY `Region`, `Income Group`
 )
 SELECT 
   ac.Region, 
-  ac.income_group
+  ac.income_group,
+  0 AS country_count  -- this is the key fix!
 FROM 
   all_combinations ac
 LEFT JOIN 
@@ -580,7 +566,6 @@ WHERE
   ec.Region IS NULL
 ORDER BY 
   ac.Region, ac.income_group;
-
 """)
 
 ```
@@ -713,13 +698,12 @@ ORDER BY
 run_sql_and_return_html(cnx,"""
 WITH income_counts AS (
   SELECT 
-    `Income Group` AS income_group,
+    COALESCE(`Income Group`, 'Unknown') AS income_group,
     COUNT(*) AS country_count
   FROM 
     wdi_country
-  WHERE `Income Group` IS NOT NULL
   GROUP BY 
-    `Income Group`
+    income_group
 ),
 total_count AS (
   SELECT COUNT(*) AS total_countries FROM wdi_country
