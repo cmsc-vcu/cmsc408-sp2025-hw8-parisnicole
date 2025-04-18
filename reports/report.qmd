@@ -91,11 +91,8 @@ List all non-countries.
 ## (skills: select, where)
 
 run_sql_and_return_html(cnx,"""
-SELECT 
-  `Country Code` AS country_code, 
-  `Short Name` AS short_name
-FROM 
-  world_bank_data.wdi_country
+SELECT `Short Name` AS short_name
+FROM world_bank_data.wdi_country
 WHERE 
   `Region` IS NULL
   OR `Income Group` IS NULL
@@ -106,8 +103,7 @@ WHERE
     'PRE', 'PSS', 'PST', 'SAS', 'SSA', 'SSF', 'SST', 'TEA', 'TEC', 'TLA',
     'TMN', 'TSA', 'TSS', 'UMC', 'WLD'
   )
-ORDER BY 
-  `Country Code`;
+ORDER BY `Short Name`;
 
 """)
 ```
@@ -412,7 +408,7 @@ SELECT
   SUM(CASE WHEN `Income Group` NOT IN (
       'High income', 'Upper middle income', 'Lower middle income', 'Low income'
   ) OR `Income Group` IS NULL THEN 1 ELSE 0 END) AS other,
-  COUNT(*) AS total
+  CAST(COUNT(*) AS DECIMAL(4,1)) AS total
 FROM 
   wdi_country
 GROUP BY 
@@ -515,10 +511,10 @@ ORDER BY
 
 run_sql_and_return_html(cnx,"""
 WITH all_regions AS (
-  SELECT DISTINCT `Region` FROM wdi_country
+  SELECT DISTINCT `Region` FROM wdi_country WHERE `Region` IS NOT NULL
 ),
 all_income_groups AS (
-  SELECT DISTINCT `Income Group` AS income_group FROM wdi_country
+  SELECT DISTINCT `Income Group` AS income_group FROM wdi_country WHERE `Income Group` IS NOT NULL
 ),
 all_combinations AS (
   SELECT 
@@ -535,19 +531,20 @@ existing_combinations AS (
     `Income Group` AS income_group
   FROM 
     wdi_country
-  WHERE `Income Group` IS NOT NULL
-  GROUP BY `Region`, `Income Group`
+  WHERE 
+    `Region` IS NOT NULL AND `Income Group` IS NOT NULL
+  GROUP BY 
+    `Region`, `Income Group`
 )
 SELECT 
   ac.Region, 
   ac.income_group,
-  0 AS country_count  -- this is the key fix!
+  0 AS country_count
 FROM 
   all_combinations ac
 LEFT JOIN 
-  existing_combinations ec
-ON 
-  ac.Region = ec.Region AND ac.income_group = ec.income_group
+  existing_combinations ec 
+  ON ac.Region = ec.Region AND ac.income_group = ec.income_group
 WHERE 
   ec.Region IS NULL
 ORDER BY 
